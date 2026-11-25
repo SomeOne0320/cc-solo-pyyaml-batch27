@@ -2,6 +2,7 @@
 __all__ = [
     'BaseConstructor',
     'SafeConstructor',
+    'CoreConstructor',
     'FullConstructor',
     'UnsafeConstructor',
     'Constructor',
@@ -478,6 +479,34 @@ SafeConstructor.add_constructor(
 
 SafeConstructor.add_constructor(None,
         SafeConstructor.construct_undefined)
+
+class CoreConstructor(SafeConstructor):
+    """
+    SafeConstructor variant for the YAML 1.2 core schema.
+
+    Only integer parsing differs: the core schema writes octals as
+    '0o...' and never produces the YAML 1.1 forms (leading-zero octals,
+    sexagesimals), which the CoreResolver does not resolve as integers
+    in the first place.
+    """
+
+    def construct_yaml_int(self, node):
+        value = self.construct_scalar(node)
+        sign = +1
+        if value[0] == '-':
+            sign = -1
+        if value[0] in '+-':
+            value = value[1:]
+        if value.startswith('0o'):
+            return sign*int(value[2:], 8)
+        elif value.startswith('0x'):
+            return sign*int(value[2:], 16)
+        else:
+            return sign*int(value)
+
+CoreConstructor.add_constructor(
+        'tag:yaml.org,2002:int',
+        CoreConstructor.construct_yaml_int)
 
 class FullConstructor(SafeConstructor):
     # 'extend' is blacklisted because it is used by

@@ -3,6 +3,16 @@ For a complete changelog, see:
 
 * https://github.com/yaml/pyyaml/commits/
 
+Unreleased
+
+* safe_load/safe_load_all/safe_dump/safe_dump_all accept an optional
+  version= selector: 'auto' resolves each document by its %YAML
+  directive (YAML 1.2 documents use the core schema, 1.1 or undeclared
+  documents keep the legacy rules), '1.1'/'1.2' force one schema, and
+  dumps emit the matching %YAML directive.  New CoreSafeLoader,
+  VersionedSafeLoader and CoreSafeDumper classes; the default behavior
+  is unchanged.
+
 6.0.3 (2025-09-25)
 
 * https://github.com/yaml/pyyaml/pull/864 -- Support for Python 3.14 and free-threading (experimental)

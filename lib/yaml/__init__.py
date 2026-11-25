@@ -114,25 +114,54 @@ def full_load_all(stream):
     """
     return load_all(stream, FullLoader)
 
-def safe_load(stream):
+def _safe_loader_for_version(version):
+    """
+    Return the SafeLoader variant matching the requested version handling:
+    None or '1.1' keeps the legacy YAML 1.1 rules, '1.2' forces the
+    YAML 1.2 core schema for the whole stream, and 'auto' selects the
+    schema of each document from its %YAML directive.
+    """
+    if version is None or version == '1.1':
+        return SafeLoader
+    elif version == '1.2':
+        return CoreSafeLoader
+    elif version == 'auto':
+        return VersionedSafeLoader
+    else:
+        raise ValueError("unsupported YAML version selector: %r "
+                "(expected None, 'auto', '1.1' or '1.2')" % (version,))
+
+def safe_load(stream, version=None):
     """
     Parse the first YAML document in a stream
     and produce the corresponding Python object.
 
     Resolve only basic YAML tags. This is known
     to be safe for untrusted input.
-    """
-    return load(stream, SafeLoader)
 
-def safe_load_all(stream):
+    The optional version argument selects how scalar types are resolved:
+    with 'auto', each document follows its %YAML directive (YAML 1.2
+    documents use the core schema, YAML 1.1 or undeclared documents keep
+    the legacy rules); '1.1' or '1.2' force one schema for the whole
+    stream.  The default (None) keeps the legacy behavior.
+    """
+    return load(stream, _safe_loader_for_version(version))
+
+def safe_load_all(stream, version=None):
     """
     Parse all YAML documents in a stream
     and produce corresponding Python objects.
 
     Resolve only basic YAML tags. This is known
     to be safe for untrusted input.
+
+    The optional version argument selects how scalar types are resolved:
+    with 'auto', each document follows its %YAML directive (YAML 1.2
+    documents use the core schema, YAML 1.1 or undeclared documents keep
+    the legacy rules); '1.1' or '1.2' force one schema for the whole
+    stream.  The default (None) keeps the legacy behavior.
     """
-    return load_all(stream, SafeLoader)
+    return load_all(stream, _safe_loader_for_version(version))
 
 def unsafe_load(stream):
     """
@@ -252,21 +281,50 @@ def dump(data, stream=None, Dumper=Dumper, **kwds):
     """
     return dump_all([data], stream, Dumper=Dumper, **kwds)
 
-def safe_dump_all(documents, stream=None, **kwds):
+def safe_dump_all(documents, stream=None, version=None, **kwds):
     """
     Serialize a sequence of Python objects into a YAML stream.
     Produce only basic YAML tags.
     If stream is None, return the produced string instead.
-    """
-    return dump_all(documents, stream, Dumper=SafeDumper, **kwds)
 
-def safe_dump(data, stream=None, **kwds):
+    The optional version argument selects the schema used to decide
+    which scalars need quoting: with '1.1' or '1.2' the matching %YAML
+    directive is written and scalars are quoted so that reading the
+    output back under the same version (or version='auto' on load)
+    preserves the type and value of every scalar, including mapping
+    keys.  A (major, minor) tuple keeps the historical meaning: the
+    directive is emitted but scalar resolution is unchanged.  The
+    default (None) keeps the legacy behavior.
+    """
+    if isinstance(version, str):
+        if version == '1.1':
+            return dump_all(documents, stream, Dumper=SafeDumper,
+                    version=(1, 1), **kwds)
+        elif version == '1.2':
+            return dump_all(documents, stream, Dumper=CoreSafeDumper,
+                    version=(1, 2), **kwds)
+        else:
+            raise ValueError("unsupported YAML version selector: %r "
+                    "(expected None, '1.1', '1.2' or a (major, minor) tuple)"
+                    % (version,))
+    if version is not None:
+        if not (isinstance(version, (tuple, list)) and len(version) == 2
+                and all(isinstance(part, int) for part in version)):
+            raise ValueError("unsupported YAML version selector: %r "
+                    "(expected None, '1.1', '1.2' or a (major, minor) tuple)"
+                    % (version,))
+        version = tuple(version)
+    return dump_all(documents, stream, Dumper=SafeDumper, version=version, **kwds)
+
+def safe_dump(data, stream=None, version=None, **kwds):
     """
     Serialize a Python object into a YAML stream.
     Produce only basic YAML tags.
     If stream is None, return the produced string instead.
+
+    See safe_dump_all for the meaning of the optional version argument.
     """
-    return dump_all([data], stream, Dumper=SafeDumper, **kwds)
+    return safe_dump_all([data], stream, version=version, **kwds)
 
 def add_implicit_resolver(tag, regexp, first=None,
         Loader=None, Dumper=Dumper):

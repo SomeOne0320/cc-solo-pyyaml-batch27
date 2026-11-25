@@ -1,5 +1,5 @@
 
-__all__ = ['BaseResolver', 'Resolver']
+__all__ = ['BaseResolver', 'Resolver', 'CoreResolver']
 
 from .error import *
 from .nodes import *
@@ -224,4 +224,49 @@ Resolver.add_implicit_resolver(
         'tag:yaml.org,2002:yaml',
         re.compile(r'^(?:!|&|\*)$'),
         list('!&*'))
+
+
+class CoreResolver(BaseResolver):
+    """
+    Implicit resolver for the YAML 1.2 core schema.
+
+    Compared to the legacy YAML 1.1 resolver: only 'true' and 'false'
+    (in any capitalization) are booleans, so words like 'on' or 'yes'
+    stay plain strings; integers are decimal unless written as '0o...'
+    (octal) or '0x...' (hexadecimal), so a leading zero no longer means
+    octal; floats may use an exponent without a dot ('1e3'); and there
+    is no timestamp, merge or value resolution, so date-like scalars
+    stay plain strings as well.
+    """
+    pass
+
+CoreResolver.add_implicit_resolver(
+        'tag:yaml.org,2002:bool',
+        re.compile(r'^(?:true|True|TRUE|false|False|FALSE)$'),
+        list('tTfF'))
+
+CoreResolver.add_implicit_resolver(
+        'tag:yaml.org,2002:int',
+        re.compile(r'''^(?:[-+]?[0-9]+
+                    |0o[0-7]+
+                    |0x[0-9a-fA-F]+)$''', re.X),
+        list('-+0123456789'))
+
+# Note: unlike the YAML 1.2 specification, the float pattern below never
+# matches a plain integer, so the result does not depend on the order in
+# which the int and float resolvers are consulted.
+CoreResolver.add_implicit_resolver(
+        'tag:yaml.org,2002:float',
+        re.compile(r'''^(?:[-+]?(?:[0-9]+\.[0-9]*|\.[0-9]+)(?:[eE][-+]?[0-9]+)?
+                    |[-+]?[0-9]+[eE][-+]?[0-9]+
+                    |[-+]?\.(?:inf|Inf|INF)
+                    |\.(?:nan|NaN|NAN))$''', re.X),
+        list('-+0123456789.'))
+
+CoreResolver.add_implicit_resolver(
+        'tag:yaml.org,2002:null',
+        re.compile(r'''^(?: ~
+                    |null|Null|NULL
+                    | )$''', re.X),
+        ['~', 'n', 'N', ''])
 

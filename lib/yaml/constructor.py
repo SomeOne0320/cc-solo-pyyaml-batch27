@@ -51,6 +51,45 @@ class BaseConstructor:
             return self.construct_document(node)
         return None
 
+    def get_data_iter(self):
+        # Construct and yield the top-level nodes of a single document one at
+        # a time. Nodes corresponding to anchors and the objects constructed
+        # from them are retained for the lifetime of the document, while
+        # everything else is released as soon as the constructed object has
+        # been delivered, keeping memory usage bounded by document complexity
+        # rather than by the number of records.
+        for node in self.compose_top_level_nodes():
+            yield self._construct_top_level_node(node)
+        # The document is fully consumed; release any remaining anchor
+        # tables before the loader is disposed or reused.
+        self.constructed_objects = {}
+        self.recursive_objects = {}
+        self.deep_construct = False
+        self.anchors = {}
+
+    def _construct_top_level_node(self, node):
+        data = self.construct_object(node)
+        # Drain any deferred two-phase constructors (mappings, sequences,
+        # sets, omaps, ...) so that every object delivered to the caller is
+        # fully populated, exactly as with construct_document().
+        while self.state_generators:
+            state_generators = self.state_generators
+            self.state_generators = []
+            for generator in state_generators:
+                for dummy in generator:
+                    pass
+        self.recursive_objects = {}
+        # Keep the constructed objects of anchored nodes: aliases appearing
+        # in later records resolve through self.anchors and must receive the
+        # very same object. All other entries reference records that have
+        # already been delivered and may be released by the caller.
+        anchored_nodes = set(self.anchors.values())
+        for constructed_node in list(self.constructed_objects):
+            if constructed_node not in anchored_nodes:
+                del self.constructed_objects[constructed_node]
+        self.deep_construct = False
+        return data
+
     def construct_document(self, node):
         data = self.construct_object(node)
         while self.state_generators:

@@ -94,6 +94,51 @@ def load_all(stream, Loader):
     finally:
         loader.dispose()
 
+def load_iter(stream, Loader=SafeLoader):
+    """
+    Parse the first YAML document in a stream and lazily produce the
+    Python objects of its top-level elements one at a time.
+
+    If the document's root is a sequence, each of its elements is yielded
+    separately; otherwise, the single root object is yielded once. The
+    stream may be a non-seekable, unbuffered text or byte stream: only the
+    portion needed for the record being constructed is read, so a very long
+    sequence does not have to be read or held in memory in full before the
+    first element is produced. Anchors stay available for the whole
+    document, so aliases resolve to the same object as in ``load``,
+    including aliases within a single record and self-referential
+    containers.
+
+    Only the pure-Python loaders (``SafeLoader`` by default) support
+    incremental loading; the libyaml-based loaders do not. The underlying
+    stream is never closed: its lifecycle remains the caller's
+    responsibility. Iterating only part of the result stops reading the
+    stream as soon as the generator is closed.
+    """
+    from .composer import Composer
+    if not issubclass(Loader, Composer):
+        raise TypeError(
+            "load_iter requires a pure-Python loader (e.g. SafeLoader); "
+            "the libyaml-based loaders cannot load incrementally")
+    return _load_iter(stream, Loader)
+
+def _load_iter(stream, Loader):
+    loader = Loader(stream)
+    try:
+        yield from loader.get_data_iter()
+    finally:
+        loader.dispose()
+
+def safe_load_iter(stream):
+    """
+    Parse the first YAML document in a stream and lazily produce the
+    Python objects of its top-level elements one at a time.
+
+    Resolve only basic YAML tags. This is known to be safe for untrusted
+    input. See ``load_iter`` for the incremental-loading semantics.
+    """
+    return load_iter(stream, SafeLoader)
+
 def full_load(stream):
     """
     Parse the first YAML document in a stream

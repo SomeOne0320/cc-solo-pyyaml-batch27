@@ -3,6 +3,13 @@ For a complete changelog, see:
 
 * https://github.com/yaml/pyyaml/commits/
 
+Unreleased
+
+* Add `yaml.load_iter()` and `yaml.safe_load_iter()`, pure-Python loaders
+  that yield the top-level elements of a sequence document one at a time
+  directly from a non-seekable stream, with bounded memory and full anchor
+  and alias support.
+
 6.0.3 (2025-09-25)
 
 * https://github.com/yaml/pyyaml/pull/864 -- Support for Python 3.14 and free-threading (experimental)

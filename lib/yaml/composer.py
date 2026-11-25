@@ -60,6 +60,52 @@ class Composer:
         self.anchors = {}
         return node
 
+    def compose_top_level_nodes(self):
+        # Compose the nodes of a single document one at a time, without
+        # composing the whole document first. If the document's root is a
+        # sequence, each of its nodes is yielded separately; any other root is
+        # yielded as a single node. Anchored nodes stay in ``self.anchors``
+        # for the whole document so aliases referring to them keep working,
+        # even when the reference appears many records later.
+        #
+        # Drop the STREAM-START event.
+        if self.check_event(StreamStartEvent):
+            self.get_event()
+
+        # An empty stream has no document and therefore no nodes.
+        if self.check_event(StreamEndEvent):
+            return
+
+        # Drop the DOCUMENT-START event.
+        self.get_event()
+
+        if self.check_event(SequenceStartEvent):
+            start_event = self.peek_event()
+            # A root sequence carrying an anchor may be aliased from within
+            # its own records (a self-referential container), and a root
+            # sequence with an explicit tag (e.g. ``!!omap``) has semantics
+            # beyond a plain sequence. In either case, compose the document
+            # as a single node and fall back to whole-document construction.
+            if start_event.anchor is not None or (
+                    start_event.tag is not None and start_event.tag != '!'):
+                yield self.compose_node(None, None)
+            else:
+                # Consume the sequence start event; the sequence itself is
+                # never composed into a SequenceNode, so its content does not
+                # accumulate.
+                self.get_event()
+                index = 0
+                while not self.check_event(SequenceEndEvent):
+                    yield self.compose_node(None, index)
+                    index += 1
+                # Drop the SEQUENCE-END event.
+                self.get_event()
+        else:
+            yield self.compose_node(None, None)
+
+        # Drop the DOCUMENT-END event.
+        self.get_event()
+
     def compose_node(self, parent, index):
         if self.check_event(AliasEvent):
             event = self.get_event()
